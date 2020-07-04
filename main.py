@@ -17,7 +17,12 @@ from telegram.ext import Filters
 from telegram.ext import MessageHandler
 from dotenv import load_dotenv
 
+logging.basicConfig(
+        format='%(asctime)s %(name)s - %(funcName)s:%(lineno)d - %(message)s', 
+        datefmt='%Y-%b-%d %H:%M:%S (%Z)',
+    )
 logger = logging.getLogger('tg_nodes')
+
 
 NODES_FILE = 'nodes_file.xlsx'
 
@@ -28,32 +33,34 @@ def start(update, context):
 
     context.bot.send_message(chat_id, text)
 
-    logger.debug('start_handler: {}'.format(chat_id))
+    logger.debug('start_handler: {}'.format(update.effective_chat.username))
 
 
 def send_text_message(update, context):
+    logger.debug('Новое сообщение:')
+
     chat_id = update.effective_chat.id
     username = update.effective_chat.username
     language_code = 'ru-RU'
     text = update.message.text
     text = text.upper()
 
+    logger.debug('От {}, chat_id {}'.format(username, chat_id))
+    logger.debug('Текст: {}'.format(text))
+
     df = get_dataframe(NODES_FILE)
     matched_addresses = get_matched_addresses(df, text)
+    logger.debug('Совпавшие адреса: {}'.format(matched_addresses))
 
-    if matched_addresses:
+    if not matched_addresses:
+        context.bot.send_message(chat_id, 'Совпадения не найдены')
+        logger.debug('Ответ: Совпадения не найдены\n')
+    else: 
         for matched_address in matched_addresses:
             node = df.loc[df['Адрес'] == matched_address]
             answer = get_node_to_print(node)
-
             context.bot.send_message(chat_id, answer)
-
-            logger.debug('Новое сообщение:')
-            logger.debug('От {}, chat_id {}'.format(username, chat_id))
-            logger.debug('Текст: {}'.format(text))
             logger.debug('Ответ: {}\n'.format(answer))
-    else:
-        context.bot.send_message(chat_id, 'Совпадений не найдено')
 
 
 def get_dataframe(nodes_file):
@@ -77,7 +84,6 @@ def get_matched_addresses(df, input_phrase):
     for address in addresses:
         if input_phrase in address:
             matched_addresses.append(address)
-    print(matched_addresses)
     return matched_addresses
 
 
@@ -108,10 +114,6 @@ def get_node_to_print(node):
 
 
 def main():
-    logging.basicConfig(
-        format='%(asctime)s %(name)s - %(funcName)s:%(lineno)d - %(message)s', 
-        datefmt='%Y-%b-%d %H:%M:%S (%Z)',
-    )
     logger.setLevel(logging.DEBUG)
 
     load_dotenv()
@@ -125,16 +127,17 @@ def main():
 
 
     # do
-    
+
     start_handler = CommandHandler('start', start)
     updater.dispatcher.add_handler(start_handler)
 
     text_massage_handler = MessageHandler(Filters.text, send_text_message)
     updater.dispatcher.add_handler(text_massage_handler)
 
-    logger.debug('все готово')
+    logger.debug('Используется файл с БД: {}'.format(NODES_FILE))
 
     try:
+        logger.debug('Запускаем бота')
         updater.start_polling()
 
     except telegram.error.NetworkError:
