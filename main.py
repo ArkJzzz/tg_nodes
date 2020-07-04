@@ -41,16 +41,19 @@ def send_text_message(update, context):
     df = get_dataframe(NODES_FILE)
     matched_addresses = get_matched_addresses(df, text)
 
-    for matched_address in matched_addresses:
-        node = df.loc[df['Адрес'] == matched_address]
-        answer = get_node_to_print(node)
+    if matched_addresses:
+        for matched_address in matched_addresses:
+            node = df.loc[df['Адрес'] == matched_address]
+            answer = get_node_to_print(node)
 
-        context.bot.send_message(chat_id, answer)
+            context.bot.send_message(chat_id, answer)
 
-        logger.debug('Новое сообщение:')
-        logger.debug('От {}, chat_id {}'.format(username, chat_id))
-        logger.debug('Текст: {}'.format(text))
-        logger.debug('Ответ: {}\n'.format(answer))
+            logger.debug('Новое сообщение:')
+            logger.debug('От {}, chat_id {}'.format(username, chat_id))
+            logger.debug('Текст: {}'.format(text))
+            logger.debug('Ответ: {}\n'.format(answer))
+    else:
+        context.bot.send_message(chat_id, 'Совпадений не найдено')
 
 
 def get_dataframe(nodes_file):
