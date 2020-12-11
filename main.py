@@ -2,11 +2,10 @@
 __author__ = 'ArkJzzz (arkjzzz@gmail.com)'
 
 
-
-import requests
 import os
 import sys
 import argparse
+import datetime
 import logging
 from logging.handlers import RotatingFileHandler
 import pandas
@@ -15,7 +14,9 @@ from telegram.ext import Updater
 from telegram.ext import CommandHandler
 from telegram.ext import Filters
 from telegram.ext import MessageHandler
+from telegram.ext import ConversationHandler
 from dotenv import load_dotenv
+
 
 logging.basicConfig(
         format='%(asctime)s %(name)s - %(funcName)s:%(lineno)d - %(message)s', 
@@ -24,16 +25,24 @@ logging.basicConfig(
 logger = logging.getLogger('tg_nodes')
 
 
+WAITING_MESSAGE, WAITING_FILE = range(2)
 NODES_FILE = 'nodes_file.xlsx'
+
 
 def start(update, context):
     chat_id=update.effective_chat.id
-    text='Здравствуйте!\nДля получения информации по узлу \
-        отправьте название улицы (можно не полностью, регистр не важен).'
+    first_name = update.effective_chat.first_name
 
-    context.bot.send_message(chat_id, text)
+    welcome_message=f'Здравствуйте {first_name}!\n'\
+        'Для получения информации по узлу '\
+        'отправьте название улицы (можно не полностью, регистр не важен).'
 
-    logger.debug('start_handler: {}'.format(update.effective_chat.username))
+
+    context.bot.send_message(chat_id, welcome_message)
+
+    logger.info('start_handler: {}'.format(update.effective_chat.username))
+
+    return WAITING_MESSAGE
 
 
 def send_text_message(update, context):
@@ -61,6 +70,10 @@ def send_text_message(update, context):
             answer = get_node_to_print(node)
             context.bot.send_message(chat_id, answer)
             logger.debug('Ответ: {}\n'.format(answer))
+
+    days_to_ny(update, context)
+
+    return WAITING_MESSAGE
 
 
 def get_dataframe(nodes_file):
@@ -113,26 +126,91 @@ def get_node_to_print(node):
     return node_to_print
 
 
+def update_nodes_file(update, context):
+    chat_id = update.effective_chat.id
+    waiting_answer = 'ожидаю файл'
+    context.bot.send_message(chat_id, waiting_answer)
+
+    return WAITING_FILE
+
+
+def save_document(update, context):
+    logger.debug('save_document')
+    chat_id = update.effective_chat.id
+    new_nodes_file = update.message.effective_attachment.get_file()
+    new_nodes_file.download('nodes_file.xlsx')
+
+    return WAITING_MESSAGE
+
+
+def need_restart(update, context):
+    chat_id = update.effective_chat.id
+    waiting_answer = 'Необходимо перезапустить бота.\nОтправьте /start'
+    context.bot.send_message(chat_id, waiting_answer)
+
+
+def days_to_ny(update, context):
+    chat_id = update.effective_chat.id
+
+    now = datetime.datetime.now()
+    then = datetime.datetime(now.year, 12, 31)
+    delta = then - now
+
+    if delta.days + 1 in [2, 3, 4]:
+        day_improvise = 'дня'
+    elif delta.days + 1 == 1:
+        day_improvise = 'день'
+    else: 
+        day_improvise = 'дней'
+
+    days_to_ny_message = 'До Новго Года 🎄🍾🥂🎅 '\
+        f'осталось потерпеть {delta.days + 1} {day_improvise} ⏰'
+
+    context.bot.send_message(chat_id, days_to_ny_message)
+
+    return WAITING_MESSAGE
+
+
 def main():
     logger.setLevel(logging.DEBUG)
 
     load_dotenv()
-    telegram_token = os.getenv("TELEGRAM_TOKEN")
+    telegram_token = os.getenv("DEV_TELEGRAM_TOKEN")
+    # telegram_token = os.getenv("TELEGRAM_TOKEN")
     
     updater = Updater(
         token=telegram_token,
         use_context=True, 
-        #request_kwargs=REQUEST_KWARGS,
     )
+
+    mime_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
 
     # do
+    conv_handler = ConversationHandler(
+        entry_points=[
+            CommandHandler('start', start),
+        ],
+        states={
+            WAITING_MESSAGE: [
+                MessageHandler(Filters.text, send_text_message),
+                CommandHandler('update_nodes_file', update_nodes_file),
+            ],
+            WAITING_FILE: [
+                MessageHandler(
+                    Filters.document.mime_type(mime_type),
+                    save_document
+                )
+            ]
+        },
+        fallbacks=[]
+    )
+    updater.dispatcher.add_handler(conv_handler)
 
-    start_handler = CommandHandler('start', start)
-    updater.dispatcher.add_handler(start_handler)
+    need_restart_handler = MessageHandler(Filters.text, need_restart)
+    updater.dispatcher.add_handler(need_restart_handler)
 
-    text_massage_handler = MessageHandler(Filters.text, send_text_message)
-    updater.dispatcher.add_handler(text_massage_handler)
+    
 
     logger.debug('Используется файл с БД: {}'.format(NODES_FILE))
 
