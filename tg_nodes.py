@@ -28,7 +28,7 @@ logger = logging.getLogger('tg_nodes')
 WAITING_MESSAGE, WAITING_FILE = range(2)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-NODES_FILE =  = os.path.join(BASE_DIR, 'nodes_file.xlsx')
+NODES_FILE = os.path.join(BASE_DIR, 'nodes_file.xlsx')
 
 ADVERTISING_IMAGE = 'advertising_image.jpeg'
 
