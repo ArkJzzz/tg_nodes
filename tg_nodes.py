@@ -3,11 +3,8 @@ __author__ = 'ArkJzzz (arkjzzz@gmail.com)'
 
 
 import os
-import sys
-import argparse
 import datetime
 import logging
-from logging.handlers import RotatingFileHandler
 import pandas
 import telegram
 from telegram.ext import Updater
@@ -19,9 +16,9 @@ from dotenv import load_dotenv
 
 
 logging.basicConfig(
-        format='%(asctime)s %(name)s - %(funcName)s:%(lineno)d - %(message)s', 
-        datefmt='%Y-%b-%d %H:%M:%S (%Z)',
-    )
+    format='%(asctime)s %(name)s - %(funcName)s:%(lineno)d - %(message)s',
+    datefmt='%Y-%b-%d %H:%M:%S (%Z)',
+)
 logger = logging.getLogger('tg_nodes')
 
 
@@ -34,13 +31,12 @@ ADVERTISING_IMAGE = 'advertising_image.jpeg'
 
 
 def start(update, context):
-    chat_id=update.effective_chat.id
+    chat_id = update.effective_chat.id
     first_name = update.effective_chat.first_name
 
-    welcome_message=f'Здравствуйте {first_name}!\n'\
+    welcome_message = f'Здравствуйте {first_name}!\n'\
         'Для получения информации по узлу '\
         'отправьте название улицы (можно не полностью, регистр не важен).'
-
 
     context.bot.send_message(chat_id, welcome_message)
 
@@ -54,7 +50,6 @@ def send_text_message(update, context):
 
     chat_id = update.effective_chat.id
     username = update.effective_chat.username
-    language_code = 'ru-RU'
     text = update.message.text
     text = text.upper()
 
@@ -68,36 +63,36 @@ def send_text_message(update, context):
     if not matched_addresses:
         context.bot.send_message(chat_id, 'Совпадения не найдены')
         logger.debug('Ответ: Совпадения не найдены\n')
-    else: 
+    else:
         for matched_address in matched_addresses:
-            node = df.loc[df['Адрес'] == matched_address]
+            node = df.loc[df['АДРЕС'] == matched_address]
             answer = get_node_to_print(node)
             context.bot.send_message(chat_id, answer)
             logger.debug('Ответ: {}\n'.format(answer))
 
     days_to_ny(update, context)
 
-    advertising_message(update, context)
+    # advertising_message(update, context)
 
     return WAITING_MESSAGE
 
 
 def get_dataframe(nodes_file):
-    dataframe = pandas.read_excel(nodes_file, sheet_name='БАЗА УЗЛОВ')
-    addresses = dataframe['Адрес'].tolist()
+    dataframe = pandas.read_excel(nodes_file, sheet_name='НОВАЯ БАЗА')
+    addresses = dataframe['АДРЕС'].tolist()
     print('Всего строк в базе: {}'.format(dataframe.shape[0]))
 
     for address in addresses:
         dataframe = dataframe.replace(
-            to_replace=address, 
+            to_replace=address,
             value=str(address).upper()
-        )   
+        )
 
     return dataframe
 
 
 def get_matched_addresses(df, input_phrase):
-    addresses = df['Адрес'].tolist()
+    addresses = df['АДРЕС'].tolist()
 
     matched_addresses = []
     for address in addresses:
@@ -108,12 +103,13 @@ def get_matched_addresses(df, input_phrase):
 
 def get_node_to_print(node):
     node_values = node.values[0]
-    node_to_print = (   
+    node_to_print = (
         'Адрес: {}\n'
+        'ID узла: {}\n'
         'Принадлежность: {}\n'
         'Тип: {}\n'
-        'Район: {}\n'
         'Допуск: {}\n'
+        'Список: {}\n'
         'Размещение: \n{}\n'
         'Контакты: \n{}\n'
         'Примечания: \n{}\n'
@@ -126,6 +122,7 @@ def get_node_to_print(node):
             node_values[5],
             node_values[6],
             node_values[7],
+            node_values[8],
         )
     )
 
@@ -145,6 +142,8 @@ def save_document(update, context):
     chat_id = update.effective_chat.id
     new_nodes_file = update.message.effective_attachment.get_file()
     new_nodes_file.download('nodes_file.xlsx')
+    save_document_answer = 'файл загружен'
+    context.bot.send_message(chat_id, save_document_answer)
 
     return WAITING_MESSAGE
 
@@ -166,7 +165,7 @@ def days_to_ny(update, context):
         day_improvise = 'дня'
     elif delta.days + 1 == 1:
         day_improvise = 'день'
-    else: 
+    else:
         day_improvise = 'дней'
 
     days_to_ny_message = 'До Новго Года 🎄🍾🥂🎅 '\
@@ -178,14 +177,15 @@ def days_to_ny(update, context):
     return WAITING_MESSAGE
 
 
+# Не удалять, использовать это для выгрузки фоток узлов
 def advertising_message(update, context):
     chat_id = update.effective_chat.id
 
     with open(ADVERTISING_IMAGE, 'rb') as ad_image:
         context.bot.send_photo(
-                chat_id=chat_id,
-                photo=ad_image,
-            )
+            chat_id=chat_id,
+            photo=ad_image,
+        )
     return WAITING_MESSAGE
 
 
@@ -193,16 +193,15 @@ def main():
     logger.setLevel(logging.DEBUG)
 
     load_dotenv()
-    # telegram_token = os.getenv("DEV_TELEGRAM_TOKEN")
-    telegram_token = os.getenv("TELEGRAM_TOKEN")
-    
+    telegram_token = os.getenv("DEV_TELEGRAM_TOKEN")
+    # telegram_token = os.getenv("TELEGRAM_TOKEN")
+
     updater = Updater(
         token=telegram_token,
-        use_context=True, 
+        use_context=True,
     )
 
     mime_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-
 
     # do
     conv_handler = ConversationHandler(
@@ -228,9 +227,6 @@ def main():
     need_restart_handler = MessageHandler(Filters.text, need_restart)
     updater.dispatcher.add_handler(need_restart_handler)
 
-
-    
-
     logger.debug('Используется файл с БД: {}'.format(NODES_FILE))
 
     try:
@@ -239,13 +235,14 @@ def main():
 
     except telegram.error.NetworkError:
         logger.error('Не могу подключиться к telegram')
-    except Exception  as err:
+    except Exception as err:
         logger.error('Бот упал с ошибкой:')
         logger.error(err)
         logger.debug(err, exc_info=True)
 
     updater.idle()
-    logger.info('Бот остановлен') 
+    logger.info('Бот остановлен')
+
 
 if __name__ == "__main__":
     main()
