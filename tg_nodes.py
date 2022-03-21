@@ -193,8 +193,8 @@ def main():
     logger.setLevel(logging.DEBUG)
 
     load_dotenv()
-    telegram_token = os.getenv("DEV_TELEGRAM_TOKEN")
-    # telegram_token = os.getenv("TELEGRAM_TOKEN")
+    # telegram_token = os.getenv("DEV_TELEGRAM_TOKEN")
+    telegram_token = os.getenv("TELEGRAM_TOKEN")
 
     updater = Updater(
         token=telegram_token,
